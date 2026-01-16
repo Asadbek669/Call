@@ -3,31 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Live Private Call</title>
+  <title>Online Call</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="container">
     <div class="card">
-      <h2>Live Call</h2>
+      <h2>Online Call</h2>
 
-      <!-- STEP 1: Name input -->
-      <div id="step-name">
-        <input id="nameInput" placeholder="Ismingizni kiriting">
-        <button id="joinBtn">Kirish</button>
-      </div>
-
-      <!-- STEP 2: Call Status -->
-      <div id="step-status" class="hidden">
-        <button id="callBtn" class="hidden">📞 Qo‘ng‘iroq qilish</button>
+      <div id="statusContainer">
         <div id="statusText" class="status">Ulanmoqda...</div>
       </div>
 
-      <!-- VIDEO ELEMENTS -->
-      <div class="video-container hidden" id="videoContainer">
-        <video id="localVideo" autoplay muted playsinline></video>
-        <video id="remoteVideo" autoplay playsinline></video>
-      </div>
+      <button id="callBtn" class="hidden">📞 Qo‘ng‘iroq qilish</button>
     </div>
   </div>
 
