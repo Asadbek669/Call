@@ -22,15 +22,6 @@ body {
   text-align: center;
 }
 
-input {
-  width: 100%;
-  padding: 12px;
-  border-radius: 8px;
-  border: none;
-  margin-bottom: 12px;
-  font-size: 16px;
-}
-
 button {
   width: 100%;
   padding: 12px;
@@ -40,7 +31,7 @@ button {
   cursor: pointer;
   background: #2563eb;
   color: white;
-  margin-bottom: 12px;
+  margin-top: 12px;
 }
 
 button:disabled {
@@ -49,35 +40,7 @@ button:disabled {
 }
 
 .status {
-  font-size: 14px;
-  margin-top: 12px;
+  font-size: 16px;
+  margin-bottom: 12px;
   opacity: 0.9;
-}
-
-.hidden {
-  display: none;
-}
-
-/* Video styling */
-.video-container {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 12px;
-  gap: 12px;
-  flex-direction: column;
-}
-
-video {
-  width: 100%;
-  border-radius: 12px;
-  background: black;
-}
-
-@media (min-width: 600px) {
-  .video-container {
-    flex-direction: row;
-  }
-  video {
-    width: 48%;
-  }
 }
