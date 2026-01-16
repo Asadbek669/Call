@@ -4,11 +4,9 @@ let pc = null;
 let localStream = null;
 let socket = null;
 
-const callBtn = document.getElementById("callBtn");
 const statusText = document.getElementById("statusText");
 const remoteAudio = document.getElementById("remoteAudio");
 
-// WebSocket ulanadi
 socket = new WebSocket(WSS_URL);
 
 socket.onopen = () => statusText.innerText = "Siz online";
@@ -18,17 +16,15 @@ socket.onmessage = async (event) => {
 
     if(msg.type === "peer_online"){
         statusText.innerText = "Ikkinchi foydalanuvchi online";
-        callBtn.classList.remove("hidden");
     }
 
     if(msg.type === "peer_offline"){
         statusText.innerText = "Ikkinchi foydalanuvchi offline";
-        callBtn.classList.add("hidden");
     }
 
     if(msg.type === "call_started"){
         statusText.innerText = "Qo‘ng‘iroq boshlandi...";
-        await startCall(false); // Bu taraf faqat audio track olishga tayyorlanadi
+        await startCall(false);
     }
 
     if(msg.type === "signal"){
@@ -47,24 +43,15 @@ socket.onmessage = async (event) => {
     }
 };
 
-callBtn.onclick = async () => {
-    socket.send(JSON.stringify({type:"call"}));
-    await startCall(true);
-};
-
 async function startCall(isOffer){
-    // Faqat audio
     localStream = await navigator.mediaDevices.getUserMedia({audio:true});
 
     pc = new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
 
-    // Lokal track peerga qo‘shish
     localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 
-    // Remote stream audio elementga
     pc.ontrack = e => remoteAudio.srcObject = e.streams[0];
 
-    // ICE candidate larni WebSocket orqali yuborish
     pc.onicecandidate = e => {
         if(e.candidate) socket.send(JSON.stringify({type:"signal", data:e.candidate}));
     };
