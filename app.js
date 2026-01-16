@@ -1,64 +1,65 @@
 const WSS_URL = "wss://call-backend-fmwj.onrender.com/ws";
+let pc = null;
+let localStream = null;
+let socket = null;
 
-const state = {
-  socket: null,
-  online: false,
-  peerOnline: false
-};
-
-const statusText = document.getElementById("statusText");
 const callBtn = document.getElementById("callBtn");
+const statusText = document.getElementById("statusText");
+const localVideo = document.createElement("video");
+const remoteVideo = document.createElement("video");
+remoteVideo.autoplay = true;
+localVideo.autoplay = true;
+localVideo.muted = true;
 
-// WebSocket ulanadi
-function connectSocket() {
-  state.socket = new WebSocket(WSS_URL);
+document.body.appendChild(localVideo);
+document.body.appendChild(remoteVideo);
 
-  state.socket.onopen = () => {
-    state.online = true;
-    send({ type: "online" }); // serverga online holat yuboriladi
-    statusText.innerText = "Siz online";
-
-    console.log("WebSocket ulanish ochildi");
-  };
-
-  state.socket.onmessage = (event) => {
+// WebSocket
+socket = new WebSocket(WSS_URL);
+socket.onopen = () => statusText.innerText = "Siz online";
+socket.onmessage = async (event) => {
     const msg = JSON.parse(event.data);
-
     if(msg.type === "peer_online") {
-      state.peerOnline = true;
-      callBtn.classList.remove("hidden");
-      statusText.innerText = "Ikkinchi foydalanuvchi online";
+        statusText.innerText = "Ikkinchi foydalanuvchi online";
+        callBtn.classList.remove("hidden");
     }
-
-    if(msg.type === "peer_offline") {
-      state.peerOnline = false;
-      callBtn.classList.add("hidden");
-      statusText.innerText = "Ikkinchi foydalanuvchi offline";
-    }
-
     if(msg.type === "call_started") {
-      statusText.innerText = "Qo‘ng‘iroq boshlandi...";
-      callBtn.disabled = true;
+        statusText.innerText = "Qo‘ng‘iroq boshlandi...";
+        await startCall(false);
     }
-  };
-
-  state.socket.onclose = () => {
-    statusText.innerText = "Ulanish uzildi";
-    callBtn.classList.add("hidden");
-  };
-}
-
-// call tugmasi
-callBtn.onclick = () => {
-  send({ type: "call" });
-  statusText.innerText = "Qo‘ng‘iroq yuborildi...";
-  callBtn.disabled = true;
+    if(msg.type === "signal") {
+        if(!pc) await startCall(false);
+        if(msg.data.type === "offer") {
+            await pc.setRemoteDescription(msg.data);
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            socket.send(JSON.stringify({type:"signal", data:answer}));
+        } else if(msg.data.type === "answer") {
+            await pc.setRemoteDescription(msg.data);
+        } else if(msg.data.candidate) {
+            await pc.addIceCandidate(msg.data);
+        }
+    }
 };
 
-// serverga yuborish
-function send(data) {
-  state.socket.send(JSON.stringify(data));
-}
+callBtn.onclick = async () => {
+    socket.send(JSON.stringify({type:"call"}));
+    await startCall(true);
+};
 
-// init
-connectSocket();
+async function startCall(isOffer) {
+    localStream = await navigator.mediaDevices.getUserMedia({video:true, audio:true});
+    localVideo.srcObject = localStream;
+
+    pc = new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
+    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+    pc.ontrack = e => remoteVideo.srcObject = e.streams[0];
+    pc.onicecandidate = e => { if(e.candidate) socket.send(JSON.stringify({type:"signal", data:e.candidate})) };
+
+    if(isOffer){
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.send(JSON.stringify({type:"signal", data:offer}));
+    }
+}
