@@ -13,6 +13,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      flex-direction: column;
       height: 100vh;
       margin: 0;
     }
@@ -24,11 +25,11 @@
       width: 100%;
       max-width: 360px;
       box-shadow: 0 10px 30px rgba(0,0,0,.5);
+      text-align: center;
     }
 
     h2 {
       margin-top: 0;
-      text-align: center;
     }
 
     input {
@@ -49,6 +50,7 @@
       cursor: pointer;
       background: #2563eb;
       color: white;
+      margin-bottom: 12px;
     }
 
     button:disabled {
@@ -58,9 +60,15 @@
 
     .status {
       margin-top: 12px;
-      text-align: center;
       font-size: 14px;
       opacity: .9;
+    }
+
+    video {
+      width: 100%;
+      border-radius: 12px;
+      margin-top: 12px;
+      background: black;
     }
 
     .hidden {
@@ -79,37 +87,38 @@
     <button id="joinBtn">Kirish</button>
   </div>
 
-  <!-- STATUS -->
+  <!-- STATUS + CALL -->
   <div id="step-status" class="hidden">
     <button id="callBtn" class="hidden">📞 Qo‘ng‘iroq qilish</button>
     <div id="statusText" class="status">Ulanmoqda...</div>
   </div>
+
+  <!-- VIDEO ELEMENTS -->
+  <video id="localVideo" autoplay muted playsinline class="hidden"></video>
+  <video id="remoteVideo" autoplay playsinline class="hidden"></video>
 </div>
 
 <script>
   /* =======================
      CONFIG
   ======================== */
-  const WSS_URL = "wss://call-backend-fmwj.onrender.com/ws"; // keyin qo'yamiz
-
-  /* =======================
-     STATE
-  ======================== */
+  const WSS_URL = "wss://call-backend-fmwj.onrender.com/ws"; // Render backend URL
   const state = {
     socket: null,
     name: "",
-    status: "ENTER_NAME" // WAITING | READY | IN_CALL
+    status: "ENTER_NAME",
+    pc: null,
+    localStream: null
   };
 
-  /* =======================
-     ELEMENTS
-  ======================== */
   const stepName = document.getElementById("step-name");
   const stepStatus = document.getElementById("step-status");
   const joinBtn = document.getElementById("joinBtn");
   const callBtn = document.getElementById("callBtn");
   const nameInput = document.getElementById("nameInput");
   const statusText = document.getElementById("statusText");
+  const localVideo = document.getElementById("localVideo");
+  const remoteVideo = document.getElementById("remoteVideo");
 
   /* =======================
      JOIN
@@ -117,7 +126,6 @@
   joinBtn.onclick = () => {
     const name = nameInput.value.trim();
     if (!name) return alert("Ism kiriting");
-
     state.name = name;
     connectSocket();
   };
@@ -129,32 +137,28 @@
     state.socket = new WebSocket(WSS_URL);
 
     state.socket.onopen = () => {
-      send({
-        type: "join",
-        name: state.name
-      });
-
+      send({ type: "join", name: state.name });
       stepName.classList.add("hidden");
       stepStatus.classList.remove("hidden");
-
       setStatus("WAITING", "Siz live. Ikkinchi ishtirokchini kutyapmiz...");
     };
 
-    state.socket.onmessage = (event) => {
+    state.socket.onmessage = async (event) => {
       const msg = JSON.parse(event.data);
 
-      if (msg.type === "waiting") {
-        setStatus("WAITING", "Kutilyapti...");
-      }
-
-      if (msg.type === "ready") {
+      if(msg.type === "waiting") setStatus("WAITING", "Kutilyapti...");
+      if(msg.type === "ready") {
         setStatus("READY", `${msg.peer} online. Qo‘ng‘iroq qilish mumkin`);
         callBtn.classList.remove("hidden");
       }
 
-      if (msg.type === "signal") {
-        // keyingi bosqichda WebRTC signal shu yerda
-        console.log("Signal:", msg.data);
+      if(msg.type === "signal") {
+        await handleSignal(msg.data);
+      }
+
+      if(msg.type === "error") {
+        alert(msg.message);
+        state.socket.close();
       }
     };
 
@@ -167,11 +171,63 @@
   /* =======================
      CALL
   ======================== */
-  callBtn.onclick = () => {
-    send({ type: "call" });
-    setStatus("IN_CALL", "Qo‘ng‘iroq boshlanmoqda...");
+  callBtn.onclick = async () => {
     callBtn.disabled = true;
+    setStatus("IN_CALL", "Qo‘ng‘iroq boshlanmoqda...");
+    await startCall();
   };
+
+  /* =======================
+     WEBRTC LOGIC
+  ======================== */
+  async function startCall() {
+    // Kamera va mikrofon
+    state.localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    localVideo.srcObject = state.localStream;
+    localVideo.classList.remove("hidden");
+
+    state.pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+
+    // Local tracks
+    state.localStream.getTracks().forEach(track => state.pc.addTrack(track, state.localStream));
+
+    // Remote tracks
+    state.pc.ontrack = (event) => {
+      remoteVideo.srcObject = event.streams[0];
+      remoteVideo.classList.remove("hidden");
+    };
+
+    // ICE candidates
+    state.pc.onicecandidate = (event) => {
+      if(event.candidate) send({ type: "signal", data: event.candidate });
+    };
+
+    // Offer
+    const offer = await state.pc.createOffer();
+    await state.pc.setLocalDescription(offer);
+    send({ type: "signal", data: offer });
+  }
+
+  /* =======================
+     SIGNAL HANDLER
+  ======================== */
+  async function handleSignal(data) {
+    if(!state.pc) {
+      // Agar peer connection hali yo‘q bo‘lsa
+      await startCall();
+    }
+
+    if(data.type === "offer") {
+      await state.pc.setRemoteDescription(data);
+      const answer = await state.pc.createAnswer();
+      await state.pc.setLocalDescription(answer);
+      send({ type: "signal", data: answer });
+    } else if(data.type === "answer") {
+      await state.pc.setRemoteDescription(data);
+    } else if(data.candidate) {
+      try { await state.pc.addIceCandidate(data); } catch(e) { console.warn(e); }
+    }
+  }
 
   /* =======================
      HELPERS
