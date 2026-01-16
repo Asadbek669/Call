@@ -9,11 +9,7 @@ body {
   margin: 0;
 }
 
-.container {
-  width: 100%;
-  max-width: 400px;
-}
-
+.container { max-width: 400px; width: 100%; }
 .card {
   background: #020617;
   padding: 24px;
@@ -34,13 +30,8 @@ button {
   margin-top: 12px;
 }
 
-button:disabled {
-  background: #334155;
-  cursor: not-allowed;
-}
+button:disabled { background: #334155; cursor: not-allowed; }
 
-.status {
-  font-size: 16px;
-  margin-bottom: 12px;
-  opacity: 0.9;
-}
+.status { font-size: 16px; margin-bottom: 12px; opacity: 0.9; }
+
+.hidden { display: none; }
