@@ -1,52 +1,204 @@
 <!DOCTYPE html>
 <html lang="uz">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Audio Call Main</title>
-  <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Call - Asosiy</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-  <div class="container">
-    <div class="card">
-      <h2>Online Call</h2>
-      <div id="statusText" class="status">Ulanmoqda...</div>
-      <button id="callBtn" class="hidden">📞 Qo‘ng‘iroq qilish</button>
+    <div class="container">
+        <div class="card">
+            <h2><i class="fas fa-phone-alt"></i> Audio Qo'ng'iroq</h2>
+            
+            <div class="audio-indicator">
+                <div id="audioLevel" class="audio-level"></div>
+            </div>
+            
+            <div id="statusText" class="status">Serverga ulanmoqda...</div>
+            
+            <div class="online-users">
+                <h3><i class="fas fa-users"></i> Online foydalanuvchilar</h3>
+                <ul id="usersList">
+                    <!-- Online userlar ro'yxati -->
+                </ul>
+            </div>
+            
+            <button id="callBtn" class="hidden">
+                <i class="fas fa-phone"></i> Qo'ng'iroq qilish
+            </button>
+            
+            <button id="refreshBtn" class="secondary">
+                <i class="fas fa-redo"></i> Yangilash
+            </button>
+            
+            <div class="instructions">
+                <p><small>1. Mikrofon ruxsatini bering</small></p>
+                <p><small>2. Ikkinchi foydalanuvchi onlayn bo'lganda qo'ng'iroq qiling</small></p>
+            </div>
+        </div>
     </div>
-  </div>
 
-  <script>
-    const WSS_URL = "wss://call-backend-fmwj.onrender.com/ws";
-
-    let socket = new WebSocket(WSS_URL);
-    const statusText = document.getElementById("statusText");
-    const callBtn = document.getElementById("callBtn");
-
-    socket.onopen = () => statusText.innerText = "Siz online";
-
-    socket.onmessage = (event) => {
-      const msg = JSON.parse(event.data);
-
-      if(msg.type === "peer_online"){
-        statusText.innerText = "Ikkinchi foydalanuvchi online";
-        callBtn.classList.remove("hidden");
-      }
-
-      if(msg.type === "peer_offline"){
-        statusText.innerText = "Ikkinchi foydalanuvchi offline";
-        callBtn.classList.add("hidden");
-      }
-
-      if(msg.type === "call_started"){
-        // Call boshlandi → call page ochiladi
-        window.location.href = "call.html";
-      }
-    };
-
-    callBtn.onclick = () => {
-      socket.send(JSON.stringify({type:"call"}));
-      window.location.href = "call.html";
-    };
-  </script>
+    <script>
+        // Render backend URL'ingizni shu yerga yozing
+        const RENDER_URL = "https://call-backend-fmwj.onrender.com";
+        let socket = null;
+        let myClientId = null;
+        let audioContext = null;
+        let analyser = null;
+        let microphone = null;
+        
+        const statusText = document.getElementById("statusText");
+        const callBtn = document.getElementById("callBtn");
+        const refreshBtn = document.getElementById("refreshBtn");
+        const usersList = document.getElementById("usersList");
+        const audioLevel = document.getElementById("audioLevel");
+        
+        // WebSocket ulanishi
+        function connectWebSocket() {
+            socket = new WebSocket(`${RENDER_URL.replace('https', 'wss')}/ws`);
+            
+            socket.onopen = () => {
+                statusText.textContent = "Serverga ulandi";
+                statusText.className = "status connected";
+            };
+            
+            socket.onmessage = (event) => {
+                const msg = JSON.parse(event.data);
+                
+                if (msg.type === "self_online") {
+                    myClientId = msg.clientId;
+                    updateUsersList([myClientId]);
+                    statusText.textContent = `Siz online (ID: ${msg.clientId})`;
+                    
+                    // Audio monitoringni boshlash
+                    startAudioMonitoring();
+                }
+                
+                else if (msg.type === "peer_online") {
+                    statusText.textContent = `Ikkinchi foydalanuvchi online (ID: ${msg.clientId})`;
+                    callBtn.classList.remove("hidden");
+                    updateUsersList([...usersList.children].map(li => li.dataset.id).concat(msg.clientId));
+                }
+                
+                else if (msg.type === "peer_offline") {
+                    statusText.textContent = "Ikkinchi foydalanuvchi offline";
+                    callBtn.classList.add("hidden");
+                    removeUserFromList(msg.clientId);
+                }
+                
+                else if (msg.type === "online_list") {
+                    updateUsersList(msg.clients);
+                    
+                    if (msg.clients.length > 1) {
+                        statusText.textContent = `${msg.clients.length - 1} ta foydalanuvchi online`;
+                        callBtn.classList.remove("hidden");
+                    } else {
+                        statusText.textContent = "Boshqa foydalanuvchi yo'q";
+                        callBtn.classList.add("hidden");
+                    }
+                }
+                
+                else if (msg.type === "call_started") {
+                    // Qo'ng'iroq boshlandi, call sahifasiga o'tish
+                    window.location.href = "call.html";
+                }
+            };
+            
+            socket.onclose = () => {
+                statusText.textContent = "Serverga ulanishda xatolik";
+                statusText.className = "status disconnected";
+                callBtn.classList.add("hidden");
+                
+                // 5 soniyadan keyin qayta ulanish
+                setTimeout(connectWebSocket, 5000);
+            };
+            
+            socket.onerror = (error) => {
+                console.error("WebSocket xatosi:", error);
+            };
+        }
+        
+        // Online userlar ro'yxatini yangilash
+        function updateUsersList(clients) {
+            usersList.innerHTML = '';
+            clients.forEach(clientId => {
+                if (clientId === myClientId) return;
+                
+                const li = document.createElement('li');
+                li.dataset.id = clientId;
+                li.innerHTML = `
+                    <span><i class="fas fa-user"></i> Foydalanuvchi ${clientId.toString().slice(-4)}</span>
+                    <span class="status-indicator"><i class="fas fa-circle" style="color: #4cd964;"></i> Online</span>
+                `;
+                usersList.appendChild(li);
+            });
+        }
+        
+        function removeUserFromList(clientId) {
+            const li = usersList.querySelector(`[data-id="${clientId}"]`);
+            if (li) li.remove();
+        }
+        
+        // Audio monitoring (mikrofonni tekshirish)
+        async function startAudioMonitoring() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                const source = audioContext.createMediaStreamSource(stream);
+                source.connect(analyser);
+                analyser.fftSize = 256;
+                
+                // Audio darajasini monitoring qilish
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+                
+                function updateAudioLevel() {
+                    analyser.getByteFrequencyData(dataArray);
+                    let sum = 0;
+                    for (let i = 0; i < dataArray.length; i++) {
+                        sum += dataArray[i];
+                    }
+                    const average = sum / bufferLength;
+                    const level = Math.min(100, (average / 128) * 100);
+                    
+                    audioLevel.style.width = `${level}%`;
+                    
+                    requestAnimationFrame(updateAudioLevel);
+                }
+                
+                updateAudioLevel();
+                
+            } catch (error) {
+                console.log("Audio monitoringda xatolik:", error);
+            }
+        }
+        
+        // Tugmalarga event listener qo'shish
+        callBtn.onclick = () => {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ type: "call" }));
+                window.location.href = "call.html";
+            }
+        };
+        
+        refreshBtn.onclick = () => {
+            if (socket) {
+                socket.close();
+            }
+            connectWebSocket();
+        };
+        
+        // Sahifa yuklanganda WebSocket'ga ulanish
+        document.addEventListener('DOMContentLoaded', connectWebSocket);
+        
+        // Sahifa yopilganda WebSocket'ni yopish
+        window.addEventListener('beforeunload', () => {
+            if (socket) socket.close();
+        });
+    </script>
 </body>
 </html>
