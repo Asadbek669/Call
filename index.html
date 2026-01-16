@@ -3,22 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Online Call</title>
+  <title>Audio Call</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="container">
     <div class="card">
-      <h2>Online Call</h2>
-
+      <h2>Audio Call</h2>
       <div id="statusContainer">
         <div id="statusText" class="status">Ulanmoqda...</div>
       </div>
-
       <button id="callBtn" class="hidden">📞 Qo‘ng‘iroq qilish</button>
+      <audio id="remoteAudio" autoplay></audio>
     </div>
   </div>
-
   <script src="app.js"></script>
 </body>
 </html>
