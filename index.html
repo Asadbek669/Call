@@ -3,20 +3,50 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Audio Call</title>
+  <title>Audio Call Main</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="container">
     <div class="card">
-      <h2>Audio Call</h2>
-      <div id="statusContainer">
-        <div id="statusText" class="status">Ulanmoqda...</div>
-      </div>
+      <h2>Online Call</h2>
+      <div id="statusText" class="status">Ulanmoqda...</div>
       <button id="callBtn" class="hidden">📞 Qo‘ng‘iroq qilish</button>
-      <audio id="remoteAudio" autoplay></audio>
     </div>
   </div>
-  <script src="app.js"></script>
+
+  <script>
+    const WSS_URL = "wss://call-backend-fmwj.onrender.com/ws";
+
+    let socket = new WebSocket(WSS_URL);
+    const statusText = document.getElementById("statusText");
+    const callBtn = document.getElementById("callBtn");
+
+    socket.onopen = () => statusText.innerText = "Siz online";
+
+    socket.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+
+      if(msg.type === "peer_online"){
+        statusText.innerText = "Ikkinchi foydalanuvchi online";
+        callBtn.classList.remove("hidden");
+      }
+
+      if(msg.type === "peer_offline"){
+        statusText.innerText = "Ikkinchi foydalanuvchi offline";
+        callBtn.classList.add("hidden");
+      }
+
+      if(msg.type === "call_started"){
+        // Call boshlandi → call page ochiladi
+        window.location.href = "call.html";
+      }
+    };
+
+    callBtn.onclick = () => {
+      socket.send(JSON.stringify({type:"call"}));
+      window.location.href = "call.html";
+    };
+  </script>
 </body>
 </html>
