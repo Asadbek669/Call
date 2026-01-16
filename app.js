@@ -28,7 +28,7 @@ socket.onmessage = async (event) => {
 
     if(msg.type === "call_started"){
         statusText.innerText = "Qo‘ng‘iroq boshlandi...";
-        await startCall(false);
+        await startCall(false); // Bu taraf faqat audio track olishga tayyorlanadi
     }
 
     if(msg.type === "signal"){
@@ -55,11 +55,16 @@ callBtn.onclick = async () => {
 async function startCall(isOffer){
     // Faqat audio
     localStream = await navigator.mediaDevices.getUserMedia({audio:true});
-    
+
     pc = new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
+
+    // Lokal track peerga qo‘shish
     localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 
+    // Remote stream audio elementga
     pc.ontrack = e => remoteAudio.srcObject = e.streams[0];
+
+    // ICE candidate larni WebSocket orqali yuborish
     pc.onicecandidate = e => {
         if(e.candidate) socket.send(JSON.stringify({type:"signal", data:e.candidate}));
     };
